@@ -1,6 +1,6 @@
 import { Stack, StackProps, Duration, RemovalPolicy } from 'aws-cdk-lib'
 import { Construct } from 'constructs'
-import { UserPool, VerificationEmailStyle, AccountRecovery, UserPoolClient, OAuthScope } from 'aws-cdk-lib/aws-cognito'
+import { UserPool, VerificationEmailStyle, AccountRecovery, UserPoolClient, Mfa } from 'aws-cdk-lib/aws-cognito'
 
 export class AuthStack extends Stack {
   constructor(scope: Construct, id: string, props?: StackProps) {
@@ -39,25 +39,36 @@ export class AuthStack extends Stack {
           required: true
         }
       },
-      removalPolicy: RemovalPolicy.DESTROY
+      // Optional TOTP (authenticator app) MFA. Users who enable it get a SOFTWARE_TOKEN_MFA
+      // challenge from /login, answered via /login/challenge.
+      mfa: Mfa.OPTIONAL,
+      mfaSecondFactor: {
+        otp: true,
+        sms: false
+      },
+      // Never delete user accounts along with the stack
+      deletionProtection: true,
+      removalPolicy: RemovalPolicy.RETAIN
     })
 
     new UserPoolClient(this, 'UserPoolClient', {
       userPool,
       userPoolClientName: 'cognito-auth-user-pool-client',
       generateSecret: true,
+      // Only the flow the API uses. REFRESH_TOKEN_AUTH is always enabled.
       authFlows: {
-        adminUserPassword: true,
-        userPassword: true,
-        custom: true
+        userPassword: true
       },
-      oAuth: {
-        flows: {
-          implicitCodeGrant: true
-        },
-        scopes: [OAuthScope.EMAIL, OAuthScope.OPENID, OAuthScope.PROFILE],
-        callbackUrls: ['http://localhost:3000/api/auth/callback']
-      }
+      // The API talks to the Cognito API directly; no Hosted UI / OAuth flows. This has to be explicit,
+      // because CDK enables the authorization code and implicit grants by default.
+      disableOAuth: true,
+      // "User does not exist" errors become generic "incorrect username or password" errors
+      preventUserExistenceErrors: true,
+      enableTokenRevocation: true,
+      // Short-lived access/ID tokens, since the API verifies them locally and can't see revocations
+      accessTokenValidity: Duration.minutes(15),
+      idTokenValidity: Duration.minutes(15),
+      refreshTokenValidity: Duration.days(30)
     })
   }
 }

@@ -6,5 +6,8 @@ import { AuthStack } from '../lib/auth-stack'
 const app = new cdk.App()
 
 new AuthStack(app, 'AuthStack', {
-  env: { account: '780544746325', region: 'eu-west-1' }
+  env: {
+    account: process.env.CDK_DEFAULT_ACCOUNT,
+    region: process.env.CDK_DEFAULT_REGION || 'eu-west-1'
+  }
 })
